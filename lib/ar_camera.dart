@@ -1,4 +1,4 @@
-import 'package:camerawesome/camerawesome_plugin.dart';
+import 'package:camerawesome/camerawesome_plugin.dart' as cam;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -42,18 +42,18 @@ class _ArCameraViewState extends State<ArCamera> {
       return SizedBox(
         width: double.infinity,
         height: double.infinity,
-        child: CameraAwesomeBuilder.custom(
-          saveConfig: SaveConfig.photo(),
-          previewFit: CameraPreviewFit.cover,
-          sensorConfig: SensorConfig.single(
-            sensor: Sensor.position(SensorPosition.back),
-            flashMode: FlashMode.none,
-            aspectRatio: CameraAspectRatios.ratio_16_9,
+        child: cam.CameraAwesomeBuilder.custom(
+          saveConfig: cam.SaveConfig.photo(),
+          previewFit: cam.CameraPreviewFit.cover,
+          sensorConfig: cam.SensorConfig.single(
+            sensor: cam.Sensor.position(cam.SensorPosition.back),
+            flashMode: cam.FlashMode.none,
+            aspectRatio: cam.CameraAspectRatios.ratio_16_9,
             zoom: 0.0,
           ),
           progressIndicator: _showCirularLoading(context),
-          imageAnalysisConfig: AnalysisConfig(
-            androidOptions: const AndroidAnalysisOptions.nv21(
+          imageAnalysisConfig: cam.AnalysisConfig(
+            androidOptions: const cam.AndroidAnalysisOptions.nv21(
               width: 250,
             ),
             maxFramesPerSecond: 5,
