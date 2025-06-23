@@ -4,20 +4,21 @@ import 'package:permission_handler/permission_handler.dart';
 
 class ArCamera extends StatefulWidget {
   const ArCamera({
-    Key? key,
+    super.key,
     required this.onCameraError,
     required this.onCameraSuccess,
-  }) : super(key: key);
+    this.aspectRatio = 16 / 9,
+  });
 
   final Function(String error) onCameraError;
   final Function() onCameraSuccess;
+  final double aspectRatio;
 
   @override
   State<ArCamera> createState() => _ArCameraViewState();
 }
 
 class _ArCameraViewState extends State<ArCamera> {
-
   bool isCameraAuthorize = false;
 
   @override
@@ -38,10 +39,9 @@ class _ArCameraViewState extends State<ArCamera> {
       return _showCirularLoading(context);
     }
 
-    if(isCameraAuthorize) {
-      return SizedBox(
-        width: double.infinity,
-        height: double.infinity,
+    if (isCameraAuthorize) {
+      return AspectRatio(
+        aspectRatio: widget.aspectRatio,
         child: CameraAwesomeBuilder.custom(
           saveConfig: SaveConfig.photo(),
           previewFit: CameraPreviewFit.cover,
@@ -61,11 +61,10 @@ class _ArCameraViewState extends State<ArCamera> {
           builder: (state, preview) {
             return IgnorePointer(
               child: StreamBuilder(
-                stream: state.sensorConfig$,
-                builder: (_, snapshot) {
-                  return const SizedBox();
-                }
-              ),
+                  stream: state.sensorConfig$,
+                  builder: (_, snapshot) {
+                    return const SizedBox();
+                  }),
             );
           },
         ),
@@ -98,20 +97,17 @@ class _ArCameraViewState extends State<ArCamera> {
     } finally {
       setState(() {});
     }
-
-    
   }
 
-  Widget _showCirularLoading(context){
+  Widget _showCirularLoading(context) {
     return Container(
-      alignment: Alignment.center,
-      height: MediaQuery.of(context).size.height,
-      width: MediaQuery.of(context).size.width,
-      child: Container(
-        height: 70.0,
-        width: 70.0,
-        child: const CircularProgressIndicator(),
-      )
-    );
+        alignment: Alignment.center,
+        height: MediaQuery.of(context).size.height,
+        width: MediaQuery.of(context).size.width,
+        child: const SizedBox(
+          height: 70.0,
+          width: 70.0,
+          child: CircularProgressIndicator(),
+        ));
   }
 }
