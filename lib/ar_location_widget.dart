@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'ar_location_view.dart';
 
+
 class ArLocationWidget extends StatefulWidget {
   const ArLocationWidget({
     super.key,
@@ -24,70 +25,30 @@ class ArLocationWidget extends StatefulWidget {
     this.showRadar = true,
     this.radarWidth,
     this.maxVisibleAnnotations = 50,
-    this.updateInterval = 100,
+    this.updateInterval = 150, // Match ar_view.dart
     this.onCompassCalibration,
   });
 
-  ///List of POIs
   final List<ArAnnotation> annotations;
-
-  ///Function given context and annotation
-  ///return widget for annotation view
   final AnnotationViewBuilder annotationViewBuilder;
-
-  ///Annotation view width
   final double annotationWidth;
-
-  ///Annotation view height
   final double annotationHeight;
-
-  ///Max distance marker visible
   final double maxVisibleDistance;
-
   final Size? frame;
-
-  ///Callback when location change
   final ChangeLocationCallback onLocationChange;
-
-  ///Show debug info sensor in debug mode
   final bool showDebugInfoSensor;
-
-  ///Padding when marker overlap
   final double paddingOverlap;
-
-  ///Offset overlap y
   final double? yOffsetOverlap;
-
-  ///accessory
   final Widget? accessory;
-
-  ///Min distance reload
   final double minDistanceReload;
-
-  ///Scale annotation view with distance from user
   final bool scaleWithDistance;
-
-  /// marker color in radar
   final Color? markerColor;
-
-  ///background radar color
   final Color? backgroundRadar;
-
-  ///radar position in view
   final RadarPosition? radarPosition;
-
-  ///Show radar in view
   final bool showRadar;
-
-  ///Radar width
   final double? radarWidth;
-
-  ///Maximum number of visible annotations
   final int maxVisibleAnnotations;
-
-  ///Update interval in milliseconds
   final int updateInterval;
-
   final void Function(bool)? onCompassCalibration;
 
   @override
@@ -101,17 +62,18 @@ class _ArLocationWidgetState extends State<ArLocationWidget> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        ArCamera(
-          onCameraError: (String error) {
-            initCam = false;
-            setState(() {});
-            debugPrint('Camera error: $error');
-          },
-          onCameraSuccess: () {
-            initCam = true;
-            setState(() {});
-            debugPrint('Camera initialized successfully');
-          },
+        Container(
+          color: Colors.black, // Debug background
+          child: ArCamera(
+            onCameraError: (String error) {
+              initCam = false;
+              setState(() {});
+            },
+            onCameraSuccess: () {
+              initCam = true;
+              setState(() {});
+            },
+          ),
         ),
         if (initCam)
           ArView(
@@ -134,13 +96,6 @@ class _ArLocationWidgetState extends State<ArLocationWidget> {
             radarWidth: widget.radarWidth,
             maxVisibleAnnotations: widget.maxVisibleAnnotations,
             updateInterval: widget.updateInterval,
-          ),
-        if (!initCam)
-          const Center(
-            child: Text(
-              'Camera not initialized. Please check permissions or restart the app.',
-              style: TextStyle(color: Colors.white, fontSize: 18),
-            ),
           ),
         if (initCam && widget.accessory != null) widget.accessory!
       ],

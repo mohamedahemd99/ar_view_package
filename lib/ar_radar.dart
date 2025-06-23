@@ -20,10 +20,9 @@ class RadarPainter extends CustomPainter {
     required this.heading,
     required this.markerColor,
     required this.background,
-    this.borderColor = Colors.grey, // Border color
-    this.borderWidth = 2.0, // Border width
-    this.minDistanceThreshold =
-        80.0, // Minimum distance to show markers (increased to reduce vibration)
+    this.borderColor = Colors.grey,
+    this.borderWidth = 2.0,
+    this.minDistanceThreshold = 50.0, // Adjusted for consistency
   });
 
   final angle = pi / 7;
@@ -33,8 +32,8 @@ class RadarPainter extends CustomPainter {
   final double maxDistance;
   final List<ArAnnotation> arAnnotations;
   final double heading;
-  final Color borderColor; // New field for border color
-  final double borderWidth; // New field for border width
+  final Color borderColor;
+  final double borderWidth;
   final double minDistanceThreshold;
 
   @override
@@ -44,16 +43,9 @@ class RadarPainter extends CustomPainter {
     final angleView1 = -(-angle + heading.toRadians);
     final center = Offset(radius, radius);
 
-    // Draw background
     _drawBackground(canvas, center, radius);
-
-    // Draw field of view
     _drawFieldOfView(canvas, center, radius, angleView, angleView1);
-
-    // Draw border
     _drawBorder(canvas, center, radius);
-
-    // Draw markers with optimization
     _drawOptimizedMarkers(canvas, radius);
   }
 
@@ -78,7 +70,7 @@ class RadarPainter extends CustomPainter {
     final Paint gradientPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          Colors.grey.withAlpha(168),
+          Colors.grey.withAlpha(60),
           Colors.grey.withAlpha(20),
         ],
       ).createShader(Rect.fromCircle(
@@ -98,26 +90,21 @@ class RadarPainter extends CustomPainter {
   }
 
   void _drawOptimizedMarkers(Canvas canvas, double radius) {
-    // Create clipping region
     final Path clipPath = Path()
       ..addOval(
           Rect.fromCircle(center: Offset(radius, radius), radius: radius));
     canvas.save();
     canvas.clipPath(clipPath);
 
-    // Filter and sort annotations by distance
     final filteredAnnotations = arAnnotations
         .where(
             (annotation) => annotation.distanceFromUser >= minDistanceThreshold)
         .toList()
       ..sort((a, b) => a.distanceFromUser.compareTo(b.distanceFromUser));
 
-    // Limit the number of markers to prevent overcrowding
     const maxMarkers = 50;
     final markersToShow = filteredAnnotations.take(maxMarkers).toList();
 
-    // Batch draw markers
-    final Paint paint = Paint()..color = markerColor;
     for (final annotation in markersToShow) {
       final distanceInRadar =
           (annotation.distanceFromUser / maxDistance) * radius;
@@ -125,6 +112,9 @@ class RadarPainter extends CustomPainter {
       final dx = distanceInRadar * sin(alpha);
       final dy = distanceInRadar * cos(alpha);
       final center = Offset(dx + radius, dy + radius);
+      final opacity =
+          (1 - (annotation.distanceFromUser / maxDistance)).clamp(0.3, 1.0);
+      final paint = Paint()..color = markerColor.withOpacity(opacity);
       canvas.drawCircle(center, 3, paint);
     }
 
@@ -133,20 +123,16 @@ class RadarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant RadarPainter oldDelegate) {
-    // Only repaint if significant changes occur
     return oldDelegate.heading != heading ||
         oldDelegate.arAnnotations.length != arAnnotations.length ||
         _hasSignificantChanges(oldDelegate);
   }
 
   bool _hasSignificantChanges(RadarPainter oldDelegate) {
-    // Check if any annotation's position has changed significantly
     if (arAnnotations.length != oldDelegate.arAnnotations.length) return true;
-
     for (int i = 0; i < arAnnotations.length; i++) {
       final oldAnnotation = oldDelegate.arAnnotations[i];
       final newAnnotation = arAnnotations[i];
-
       if ((oldAnnotation.azimuth - newAnnotation.azimuth).abs() > 1.0 ||
           (oldAnnotation.distanceFromUser - newAnnotation.distanceFromUser)
                   .abs() >

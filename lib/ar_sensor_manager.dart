@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:native_device_orientation/native_device_orientation.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -22,7 +23,7 @@ class ArSensorManager {
       NativeDeviceOrientationCommunicator();
   Stream<NativeDeviceOrientation>? _orientationStream;
   StreamSubscription<NativeDeviceOrientation>? _orientationStreamSubscription;
-  NativeDeviceOrientation _orientation = NativeDeviceOrientation.portraitUp;
+  NativeDeviceOrientation orientation = NativeDeviceOrientation.portraitUp;
 
   Vector3 _accelerometer = Vector3.zero();
   Vector3 _userAccelerometer = Vector3.zero();
@@ -31,6 +32,8 @@ class ArSensorManager {
 
   double _heading = 0.0;
   double _compassAccuracy = 0.0;
+  double? _smoothedHeading;
+  DateTime? _lastSensorUpdate;
 
   late StreamController<ArSensor> _arSensorController;
 
@@ -61,45 +64,71 @@ class ArSensorManager {
     });
 
     _positionSubscription =
-        Geolocator.getPositionStream().listen((Position position) {
-      _position = position;
-      _calculateSensor();
-    });
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 5,
+          ),
+        ).listen((Position position) {
+          debugPrint('Position updated: ${position.latitude}, ${position.longitude}');
+          _position = position;
+          _calculateSensor();
+        });
 
     _orientationStream =
         _deviceOrientationCommunicator.onOrientationChanged(useSensor: true);
     _orientationStreamSubscription = _orientationStream?.listen((event) {
-      _orientation = event;
+      orientation = event;
     });
   }
 
   void _calculateSensor() {
-    const coef = -0.1;
-    final x = coef * (_accelerometer.x - _userAccelerometer.x);
-    final y = coef * (_accelerometer.y - _userAccelerometer.y);
-    final z = coef * (_accelerometer.z - _userAccelerometer.z);
-    final Vector3 gravity = Vector3(x, y, z);
-    final double pitch = ArMath.calculatePitch(
-      gravity: gravity,
-      orientation: _orientation,
-    );
+    try {
+      const minUpdateInterval = Duration(milliseconds: 50);
+      if (_lastSensorUpdate != null &&
+          DateTime.now().difference(_lastSensorUpdate!) < minUpdateInterval) {
+        return;
+      }
+      _lastSensorUpdate = DateTime.now();
 
-    pitchHistory.add(pitch);
+      const coef = -0.1;
+      final x = coef * (_accelerometer.x - _userAccelerometer.x);
+      final y = coef * (_accelerometer.y - _userAccelerometer.y);
+      final z = coef * (_accelerometer.z - _userAccelerometer.z);
+      final Vector3 gravity = Vector3(x, y, z);
+      final double pitch = ArMath.calculatePitch(
+        gravity: gravity,
+        orientation: orientation,
+      );
 
-    const serieLength = 100;
-    const alpha = 0.009;
-    if (pitchHistory.length > serieLength) {
-      pitchHistory = pitchHistory.sublist(pitchHistory.length - serieLength);
+      pitchHistory.add(pitch);
+
+      const serieLength = 100;
+      const alpha = 0.009;
+      if (pitchHistory.length > serieLength) {
+        pitchHistory = pitchHistory.sublist(pitchHistory.length - serieLength);
+      }
+
+      const headingAlpha = 0.1;
+      _smoothedHeading = ArMath.exponentialFilter(
+        _heading,
+        _smoothedHeading ?? _heading,
+        headingAlpha,
+        true,
+      );
+
+      final arSensor = ArSensor(
+        heading: _smoothedHeading!,
+        pitch: _filterExponential(pitchHistory, alpha),
+        location: _position,
+        orientation: orientation,
+        compassAccuracy: _compassAccuracy,
+      );
+      _arSensorController.add(arSensor);
+    } catch (e) {
+      debugPrint('Sensor calculation error: $e');
+      _arSensorController.addError(e);
     }
-
-    final arSensor = ArSensor(
-      heading: _heading,
-      pitch: _filterExponential(pitchHistory, alpha),
-      location: _position,
-      orientation: _orientation,
-      compassAccuracy: _compassAccuracy,
-    );
-    _arSensorController.add(arSensor);
   }
 
   Stream<ArSensor> get arSensor => _arSensorController.stream;

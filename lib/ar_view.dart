@@ -34,7 +34,7 @@ class ArView extends StatefulWidget {
     this.showRadar = true,
     this.radarWidth,
     this.maxVisibleAnnotations = 50,
-    this.updateInterval = 100,
+    this.updateInterval = 150, // Increased for performance
     this.onCompassCalibration,
   });
 
@@ -82,6 +82,10 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   // Compass calibration
   double _compassOffset = 0.0;
   bool _isCalibrating = false;
+  final List<double> _calibrationSamples = []; // For averaging
+
+  // Orientation tracking
+  Orientation? _lastOrientation;
 
   @override
   void initState() {
@@ -102,6 +106,21 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newOrientation = MediaQuery.of(context).orientation;
+    if (newOrientation != _lastOrientation) {
+      _lastOrientation = newOrientation;
+      _calculateFOV(
+        ArSensorManager.instance.orientation,
+        MediaQuery.of(context).size.width,
+        MediaQuery.of(context).size.height,
+      );
+      _processAnnotations();
+    }
+  }
+
+  @override
   void dispose() {
     _updateTimer?.cancel();
     for (final controller in _animationControllers.values) {
@@ -119,41 +138,45 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     return StreamBuilder(
       stream: ArSensorManager.instance.arSensor,
       builder: (context, data) {
-        if (data.hasData && data.data != null) {
-          final arSensor = data.data!;
-          if (arSensor.location == null) {
-            return _buildLoadingWidget();
-          }
-
-          _calculateFOV(arSensor.orientation, width, height);
-          _updatePosition(arSensor.location!);
-          _updateCompassCalibration(arSensor);
-
-          return _buildArView(context, arSensor, width, height);
+        if (data.hasError) {
+          return const Center(
+            child: Text(
+              'Error accessing sensors',
+              style: TextStyle(color: Colors.red, fontSize: 18),
+            ),
+          );
         }
-        return _buildLoadingWidget();
+        if (!data.hasData || data.data == null) {
+          return _buildLoadingWidget();
+        }
+        final arSensor = data.data!;
+        if (arSensor.location == null) {
+          return _buildLoadingWidget();
+        }
+
+        _calculateFOV(arSensor.orientation, width, height);
+        _updatePosition(arSensor.location!);
+        _updateCompassCalibration(arSensor);
+
+        return _buildArView(context, arSensor, width, height);
       },
     );
   }
 
   Widget _buildArView(
       BuildContext context, ArSensor arSensor, double width, double height) {
+    if (_visibleAnnotations.isEmpty) {
+      _processAnnotations(); // Force reprocess if empty
+    }
     return Stack(
       children: [
-        // Debug info
         if (kDebugMode && widget.showDebugInfoSensor)
           Positioned(
             bottom: 0,
             child: _buildDebugInfo(context, arSensor),
           ),
-
-        // Annotations with smooth animations
         _buildAnnotationsLayer(height),
-
-        // Radar
         if (widget.showRadar) _buildRadar(context, arSensor.heading, width),
-
-        // Compass calibration indicator
         if (_isCalibrating) _buildCalibrationIndicator(),
       ],
     );
@@ -161,7 +184,6 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
 
   Widget _buildAnnotationsLayer(double height) {
     if (_visibleAnnotations.isEmpty) {
-      // Fallback UI if no annotations are visible
       return const Center(
         child: Text(
           'No AR annotations found nearby.',
@@ -173,7 +195,6 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
       children: _visibleAnnotations.map((annotation) {
         final key = annotation.uid ?? annotation.toString();
 
-        // Create animation controller if not exists
         if (!_animationControllers.containsKey(key)) {
           final controller = AnimationController(
             duration: const Duration(milliseconds: 300),
@@ -197,12 +218,16 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                 offset: Offset(0, annotation.arPositionOffset.dy),
                 child: Transform.scale(
                   scale: _calculateScale(annotation) * controller.value,
+                  alignment: Alignment.center,
                   child: Opacity(
                     opacity: controller.value,
-                    child: SizedBox(
-                      width: widget.annotationWidth,
-                      height: widget.annotationHeight,
-                      child: widget.annotationViewBuilder(context, annotation),
+                    child: AspectRatio(
+                      aspectRatio: widget.annotationWidth / widget.annotationHeight,
+                      child: SizedBox(
+                        width: widget.annotationWidth,
+                        height: widget.annotationHeight,
+                        child: widget.annotationViewBuilder(context, annotation),
+                      ),
                     ),
                   ),
                 ),
@@ -218,7 +243,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     return _positionRadar(
       context,
       widget.radarPosition ?? RadarPosition.topLeft,
-      heading + _compassOffset, // Apply compass calibration
+      heading + _compassOffset,
       widget.radarWidth != null ? (widget.radarWidth! * 2) : width,
     );
   }
@@ -235,13 +260,16 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
           color: Colors.orange.withOpacity(0.9),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.rotate_right, color: Colors.white),
-            SizedBox(width: 8),
-            Text(
-              'Move your device in a figure-8 pattern to calibrate compass',
+            AnimatedContainer(
+              duration: const Duration(seconds: 2),
+              child: const Icon(Icons.rotate_right, color: Colors.white),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Move device in a figure-8 to calibrate compass',
               style: TextStyle(color: Colors.white, fontSize: 12),
             ),
           ],
@@ -252,34 +280,41 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
 
   double _calculateScale(ArAnnotation annotation) {
     if (!widget.scaleWithDistance) return 1.0;
-
     final scale =
         1 - (annotation.distanceFromUser / (widget.maxVisibleDistance + 280));
-    return scale.clamp(0.3, 1.0); // Prevent annotations from becoming too small
+    return scale.clamp(0.3, 1.0);
   }
 
   void _processAnnotations() {
     if (_isProcessing) return;
     _isProcessing = true;
-
+    debugPrint('Processing annotations, input count: ${widget.annotations.length}');
     try {
       final deviceLocation = position;
-      if (deviceLocation == null) return;
-
+      if (deviceLocation == null) {
+        debugPrint('No device location available');
+        return;
+      }
+      debugPrint('Device location: ${deviceLocation.latitude}, ${deviceLocation.longitude}');
+      final now = DateTime.now();
+      if (_lastUpdate != null &&
+          now.difference(_lastUpdate!).inMilliseconds < widget.updateInterval * 2) {
+        return; // Throttle updates
+      }
       final annotations = _filterAndSortArAnnotation(
         widget.annotations,
         deviceLocation,
       );
-
       _transformAnnotations(annotations);
       _cleanupUnusedControllers();
-
       if (mounted) {
         setState(() {
           _visibleAnnotations = annotations;
+          debugPrint('Visible annotations updated: ${_visibleAnnotations.length}');
         });
       }
     } finally {
+      _lastUpdate = DateTime.now();
       _isProcessing = false;
     }
   }
@@ -288,15 +323,14 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     final visibleKeys =
         _visibleAnnotations.map((a) => a.uid ?? a.toString()).toSet();
     final controllersToRemove = <String>[];
-
     for (final key in _animationControllers.keys) {
       if (!visibleKeys.contains(key)) {
-        _animationControllers[key]?.dispose();
+        _animationControllers[key]?.forward(from: 0.0);
         controllersToRemove.add(key);
       }
     }
-
     for (final key in controllersToRemove) {
+      _animationControllers[key]?.dispose();
       _animationControllers.remove(key);
       _annotationPositions.remove(key);
       _smoothedAzimuths.remove(key);
@@ -309,7 +343,6 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     double hFov = 0;
     double vFov = 0;
     const tempFOv = 58.0;
-
     if (orientation == NativeDeviceOrientation.landscapeLeft ||
         orientation == NativeDeviceOrientation.landscapeRight) {
       hFov = tempFOv;
@@ -318,82 +351,60 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
       vFov = tempFOv;
       hFov = (2 * atan(tan((vFov / 2).toRadians) * (width / height))).toDegrees;
     }
-
     arStatus.hFov = hFov;
     arStatus.vFov = vFov;
     arStatus.hPixelPerDegree = hFov > 0 ? (width / hFov) : 0;
     arStatus.vPixelPerDegree = vFov > 0 ? (height / vFov) : 0;
+    debugPrint('FOV calculated: hFov=$hFov, vFov=$vFov');
   }
 
   List<ArAnnotation> _filterAndSortArAnnotation(
     List<ArAnnotation> annotations,
     Position deviceLocation,
   ) {
-    final now = DateTime.now();
-    if (_lastUpdate != null &&
-        now.difference(_lastUpdate!).inMilliseconds < widget.updateInterval) {
-      return _visibleAnnotations;
-    }
-    _lastUpdate = now;
-
     final filteredAnnotations = <ArAnnotation>[];
-
     for (final annotation in annotations) {
-      // Calculate distance and azimuth
       final distance = Geolocator.distanceBetween(
         deviceLocation.latitude,
         deviceLocation.longitude,
         annotation.position.latitude,
         annotation.position.longitude,
       );
-
       final rawAzimuth = ArMath.bearingFromUserToLocation(
         deviceLocation,
         annotation.position,
       );
-
-      // Apply smoothing to reduce vibration (tuned filter factors)
       final key = annotation.uid ?? annotation.toString();
       final smoothedAzimuth = _applySmoothingFilter(
         key,
         rawAzimuth,
         _smoothedAzimuths,
         isCircular: true,
-        filterFactor: 0.5, // less vibration
+        filterFactor: 0.5,
       );
       final smoothedDistance = _applySmoothingFilter(
         key,
         distance,
         _smoothedDistances,
         isCircular: false,
-        filterFactor: 0.3, // less vibration
+        filterFactor: 0.3,
       );
-
       annotation.distanceFromUser = smoothedDistance;
       annotation.azimuth = smoothedAzimuth;
-
-      // Loosen filtering: allow more annotations to be visible
-      const minDistance = 0.0; // allow all close annotations
-      final maxDistance = widget.maxVisibleDistance * 1.5; // allow further
-
+      const minDistance = 5.0; // Adjusted to reduce vibration
+      final maxDistance = widget.maxVisibleDistance * 1.5;
       if (distance >= minDistance && distance <= maxDistance) {
         annotation.isVisible = true;
         filteredAnnotations.add(annotation);
+        debugPrint('Annotation ${annotation.uid} included: distance=$distance, azimuth=$smoothedAzimuth');
       } else {
         annotation.isVisible = false;
-        // Debug: log why filtered out
         debugPrint(
-            'Filtered out annotation ${annotation.uid}: distance=$distance, azimuth=$rawAzimuth');
+            'Annotation ${annotation.uid} filtered out: distance=$distance (min=$minDistance, max=$maxDistance), azimuth=$smoothedAzimuth');
       }
     }
-
-    // Sort by distance
-    filteredAnnotations
-        .sort((a, b) => a.distanceFromUser.compareTo(b.distanceFromUser));
-
-    // Debug: log how many annotations are visible
-    debugPrint('Visible annotations: \\${filteredAnnotations.length}');
-
+    filteredAnnotations.sort((a, b) => a.distanceFromUser.compareTo(b.distanceFromUser));
+    debugPrint('Visible annotations: ${filteredAnnotations.length}');
     return filteredAnnotations.take(widget.maxVisibleAnnotations).toList();
   }
 
@@ -404,31 +415,29 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     required bool isCircular,
     double filterFactor = 0.2,
   }) {
+    final distance = _smoothedDistances[key] ?? newValue;
+    final adjustedFilterFactor = distance < 50 ? filterFactor * 1.5 : filterFactor; // Stronger smoothing for close objects
     if (!cache.containsKey(key)) {
       cache[key] = newValue;
       return newValue;
     }
-
     final previousValue = cache[key]!;
     final smoothedValue = ArMath.exponentialFilter(
       newValue,
       previousValue,
-      filterFactor,
+      adjustedFilterFactor,
       isCircular,
     );
-
     cache[key] = smoothedValue;
     return smoothedValue;
   }
 
   void _transformAnnotations(List<ArAnnotation> annotations) {
+    debugPrint('Transforming ${annotations.length} annotations');
     final width = MediaQuery.of(context).size.width;
     final height = MediaQuery.of(context).size.height;
-
     for (final annotation in annotations) {
       final key = annotation.uid ?? annotation.toString();
-
-      // Calculate position with compass calibration
       final adjustedAzimuth = annotation.azimuth + _compassOffset;
       final newPosition = _calculateAnnotationPosition(
         adjustedAzimuth,
@@ -436,8 +445,6 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
         width,
         height,
       );
-
-      // Smooth position transitions
       final currentPosition = _annotationPositions[key];
       if (currentPosition != null) {
         const lerpFactor = 0.3;
@@ -451,10 +458,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
       } else {
         _annotationPositions[key] = newPosition;
       }
-
       annotation.arPosition = _annotationPositions[key]!;
-
-      // Calculate overlap offset
       annotation.arPositionOffset =
           _calculateOverlapOffset(annotation, annotations);
     }
@@ -466,33 +470,25 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     double width,
     double height,
   ) {
-    // Convert azimuth to screen coordinates
     final normalizedAzimuth =
         ArMath.normalizeDegree2(azimuth - arStatus.heading);
     final x = (width / 2) + (normalizedAzimuth * arStatus.hPixelPerDegree);
-
-    // Apply pitch-based vertical positioning
     final pitchOffset = arStatus.pitch * arStatus.vPixelPerDegree;
     final y = (height / 2) + pitchOffset;
-
     return Offset(x, y);
   }
 
   Offset _calculateOverlapOffset(
       ArAnnotation annotation, List<ArAnnotation> allAnnotations) {
-    // Simple overlap avoidance
     double yOffset = 0;
     const overlapThreshold = 50.0;
-
     for (final other in allAnnotations) {
       if (other.uid == annotation.uid) continue;
-
       final distance = (annotation.arPosition - other.arPosition).distance;
       if (distance < overlapThreshold) {
         yOffset += widget.paddingOverlap;
       }
     }
-
     return Offset(0, yOffset);
   }
 
@@ -507,7 +503,6 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
         newPosition.latitude,
         newPosition.longitude,
       );
-
       if (distance > widget.minDistanceReload) {
         widget.onLocationChange(newPosition);
         position = newPosition;
@@ -517,27 +512,25 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
 
   void _updateCompassCalibration(ArSensor arSensor) {
     final needsCalibration = arSensor.compassAccuracy < 0.5;
-
     if (needsCalibration != _isCalibrating) {
       setState(() {
         _isCalibrating = needsCalibration;
       });
     }
-
     widget.onCompassCalibration?.call(needsCalibration);
-
-    // Auto-calibrate compass based on device movement patterns
     if (!needsCalibration && arSensor.compassAccuracy > 0.8) {
       _calibrateCompass(arSensor.heading);
     }
   }
 
   void _calibrateCompass(double currentHeading) {
-    // Simple compass calibration - could be enhanced with more sophisticated algorithms
-    const calibrationThreshold = 5.0;
-
-    if (_compassOffset.abs() > calibrationThreshold) {
-      _compassOffset *= 0.95; // Gradually reduce offset
+    if (_isCalibrating) {
+      _calibrationSamples.add(currentHeading);
+      if (_calibrationSamples.length >= 20) {
+        final averageHeading = _calibrationSamples.reduce((a, b) => a + b) / _calibrationSamples.length;
+        _compassOffset = ArMath.normalizeDegree(averageHeading - currentHeading);
+        _calibrationSamples.clear();
+      }
     }
   }
 
@@ -553,14 +546,13 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
         size: Size(width / 2, width / 2),
         painter: RadarPainter(
           maxDistance: widget.maxVisibleDistance,
-          arAnnotations: _visibleAnnotations, // Use filtered annotations
+          arAnnotations: _visibleAnnotations,
           heading: heading,
           background: widget.backgroundRadar ?? Colors.black,
           markerColor: widget.markerColor ?? Colors.red,
         ),
       ),
     );
-
     final screenWidth = MediaQuery.of(context).size.width;
     switch (position) {
       case RadarPosition.topCenter:
