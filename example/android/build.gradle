@@ -1,14 +1,10 @@
 buildscript {
-    ext.kotlin_version = '1.9.10'
     repositories {
         google()
         mavenCentral()
     }
 
-    dependencies {
-        classpath 'com.android.tools.build:gradle:7.1.2'
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-    }
+    dependencies {}
 }
 
 allprojects {
@@ -18,12 +14,22 @@ allprojects {
     }
 }
 
-rootProject.buildDir = '../build'
+rootProject.buildDir = "../build"
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
-}
-subprojects {
-    project.evaluationDependsOn(':app')
+    
+    if (project.hasProperty("android")) {
+        project.afterEvaluate {
+            android {
+                configurations.all {
+                    resolutionStrategy.force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.20'
+                    resolutionStrategy.force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.20'
+                    resolutionStrategy.force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.20'
+                }
+            }
+        }
+    }
+    project.evaluationDependsOn(":app")
 }
 
 tasks.register("clean", Delete) {

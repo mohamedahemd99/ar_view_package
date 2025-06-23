@@ -4,78 +4,99 @@ import 'annotations.dart';
 
 class AnnotationView extends StatelessWidget {
   const AnnotationView({
-    Key? key,
+    super.key,
     required this.annotation,
-  }) : super(key: key);
+  });
 
   final Annotation annotation;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(5),
-        color: Colors.white,
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              decoration: const BoxDecoration(
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(5),
-                  bottomLeft: Radius.circular(5),
-                ),
-              ),
-              child: typeFactory(annotation.type),
-            ),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              _getColorForType(annotation.type).withOpacity(0.8),
+              _getColorForType(annotation.type).withOpacity(0.6),
+            ],
           ),
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(4.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    annotation.type.toString().substring(15),
-                    maxLines: 1,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _getIconForType(annotation.type),
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _getTitleForType(annotation.type),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
-                  Text(
-                    '${annotation.distanceFromUser.toInt()} m',
-                  ),
-                ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Distance: ${(annotation.distanceFromUser / 1000).toStringAsFixed(1)} km',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
               ),
             ),
-          )
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget typeFactory(AnnotationType type) {
-    IconData iconData = Icons.ac_unit_outlined;
-    Color color = Colors.teal;
+  Color _getColorForType(AnnotationType type) {
     switch (type) {
       case AnnotationType.pharmacy:
-        iconData = Icons.local_pharmacy_outlined;
-        color = Colors.red;
-        break;
+        return Colors.blue;
       case AnnotationType.hotel:
-        iconData = Icons.hotel_outlined;
-        color = Colors.green;
-        break;
+        return Colors.orange;
       case AnnotationType.library:
-        iconData = Icons.library_add_outlined;
-        color = Colors.blue;
-        break;
+        return Colors.green;
     }
-    return Icon(
-      iconData,
-      size: 40,
-      color: color,
-    );
+  }
+
+  IconData _getIconForType(AnnotationType type) {
+    switch (type) {
+      case AnnotationType.pharmacy:
+        return Icons.local_pharmacy;
+      case AnnotationType.hotel:
+        return Icons.hotel;
+      case AnnotationType.library:
+        return Icons.local_library;
+    }
+  }
+
+  String _getTitleForType(AnnotationType type) {
+    switch (type) {
+      case AnnotationType.pharmacy:
+        return 'Pharmacy';
+      case AnnotationType.hotel:
+        return 'Hotel';
+      case AnnotationType.library:
+        return 'Library';
+    }
   }
 }

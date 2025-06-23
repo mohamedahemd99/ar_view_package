@@ -291,7 +291,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     if (_isProcessing) return;
     _isProcessing = true;
     debugPrint(
-        'Processing annotations, input count: ${widget.annotations.length}');
+        'Processing annotations, input count: \\${widget.annotations.length}');
     try {
       final deviceLocation = position;
       if (deviceLocation == null) {
@@ -299,7 +299,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
         return;
       }
       debugPrint(
-          'Device location: ${deviceLocation.latitude}, ${deviceLocation.longitude}');
+          'Device location: \\${deviceLocation.latitude}, \\${deviceLocation.longitude}');
       final now = DateTime.now();
       if (_lastUpdate != null &&
           now.difference(_lastUpdate!).inMilliseconds <
@@ -313,11 +313,15 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
       _transformAnnotations(annotations);
       _cleanupUnusedControllers();
       if (mounted) {
-        setState(() {
-          _visibleAnnotations = annotations;
-          debugPrint(
-              'Visible annotations updated: ${_visibleAnnotations.length}');
-        });
+        // Only update UI if the visible annotations list has changed
+        if (_visibleAnnotations.length != annotations.length ||
+            !_visibleAnnotations.every((a) => annotations.contains(a))) {
+          setState(() {
+            _visibleAnnotations = annotations;
+            debugPrint(
+                'Visible annotations updated: \\${_visibleAnnotations.length}');
+          });
+        }
       }
     } finally {
       _lastUpdate = DateTime.now();
@@ -527,8 +531,12 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   void _updateCompassCalibration(ArSensor arSensor) {
     final needsCalibration = arSensor.compassAccuracy < 0.5;
     if (needsCalibration != _isCalibrating) {
-      setState(() {
-        _isCalibrating = needsCalibration;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _isCalibrating = needsCalibration;
+          });
+        }
       });
     }
     widget.onCompassCalibration?.call(needsCalibration);
