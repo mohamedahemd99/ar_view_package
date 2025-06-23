@@ -4,7 +4,7 @@ import 'ar_location_view.dart';
 
 class ArLocationWidget extends StatefulWidget {
   const ArLocationWidget({
-    Key? key,
+    super.key,
     required this.annotations,
     required this.annotationViewBuilder,
     required this.onLocationChange,
@@ -23,7 +23,10 @@ class ArLocationWidget extends StatefulWidget {
     this.radarPosition,
     this.showRadar = true,
     this.radarWidth,
-  }) : super(key: key);
+    this.maxVisibleAnnotations = 50,
+    this.updateInterval = 100,
+    this.onCompassCalibration,
+  });
 
   ///List of POIs
   final List<ArAnnotation> annotations;
@@ -79,6 +82,14 @@ class ArLocationWidget extends StatefulWidget {
   ///Radar width
   final double? radarWidth;
 
+  ///Maximum number of visible annotations
+  final int maxVisibleAnnotations;
+
+  ///Update interval in milliseconds
+  final int updateInterval;
+
+  final void Function(bool)? onCompassCalibration;
+
   @override
   State<ArLocationWidget> createState() => _ArLocationWidgetState();
 }
@@ -119,6 +130,8 @@ class _ArLocationWidgetState extends State<ArLocationWidget> {
             radarPosition: widget.radarPosition,
             showRadar: widget.showRadar,
             radarWidth: widget.radarWidth,
+            maxVisibleAnnotations: widget.maxVisibleAnnotations,
+            updateInterval: widget.updateInterval,
           ),
         if (initCam && widget.accessory != null) widget.accessory!
       ],
