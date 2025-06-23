@@ -22,7 +22,8 @@ class RadarPainter extends CustomPainter {
     required this.background,
     this.borderColor = Colors.grey, // Border color
     this.borderWidth = 2.0, // Border width
-    this.minDistanceThreshold = 50.0, // Minimum distance to show markers
+    this.minDistanceThreshold =
+        80.0, // Minimum distance to show markers (increased to reduce vibration)
   });
 
   final angle = pi / 7;

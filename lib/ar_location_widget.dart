@@ -105,10 +105,12 @@ class _ArLocationWidgetState extends State<ArLocationWidget> {
           onCameraError: (String error) {
             initCam = false;
             setState(() {});
+            debugPrint('Camera error: $error');
           },
           onCameraSuccess: () {
             initCam = true;
             setState(() {});
+            debugPrint('Camera initialized successfully');
           },
         ),
         if (initCam)
@@ -132,6 +134,13 @@ class _ArLocationWidgetState extends State<ArLocationWidget> {
             radarWidth: widget.radarWidth,
             maxVisibleAnnotations: widget.maxVisibleAnnotations,
             updateInterval: widget.updateInterval,
+          ),
+        if (!initCam)
+          const Center(
+            child: Text(
+              'Camera not initialized. Please check permissions or restart the app.',
+              style: TextStyle(color: Colors.white, fontSize: 18),
+            ),
           ),
         if (initCam && widget.accessory != null) widget.accessory!
       ],
