@@ -1,4 +1,5 @@
 import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -14,7 +15,7 @@ typedef ChangeLocationCallback = void Function(Position position);
 
 class ArView extends StatefulWidget {
   const ArView({
-    Key? key,
+    super.key,
     required this.annotations,
     required this.annotationViewBuilder,
     required this.frame,
@@ -32,7 +33,7 @@ class ArView extends StatefulWidget {
     this.radarPosition,
     this.showRadar = true,
     this.radarWidth,
-  }) : super(key: key);
+  });
 
   final List<ArAnnotation> annotations;
   final AnnotationViewBuilder annotationViewBuilder;
@@ -94,14 +95,8 @@ class _ArViewState extends State<ArView> {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery
-        .of(context)
-        .size
-        .width;
-    final height = MediaQuery
-        .of(context)
-        .size
-        .height;
+    final width = MediaQuery.of(context).size.width;
+    final height = MediaQuery.of(context).size.height;
     return StreamBuilder(
       stream: ArSensorManager.instance.arSensor,
       builder: (context, data) {
@@ -126,9 +121,11 @@ class _ArViewState extends State<ArView> {
                   ),
                 Stack(
                   children: annotations.map(
-                        (e) {
+                    (e) {
+                      print(
+                          'DEBUG: Building annotation widget for UID: \\${e.uid}, visible: \\${e.isVisible}, distance: \\${e.distanceFromUser}');
                       return AnimatedPositioned(
-                        duration: Duration(milliseconds: 300),
+                        duration: const Duration(milliseconds: 300),
                         // Add this duration
 
                         left: e.arPosition.dx,
@@ -138,8 +135,8 @@ class _ArViewState extends State<ArView> {
                           child: Transform.scale(
                             scale: widget.scaleWithDistance
                                 ? 1 -
-                                (e.distanceFromUser /
-                                    (widget.maxVisibleDistance + 280))
+                                    (e.distanceFromUser /
+                                        (widget.maxVisibleDistance + 280))
                                 : 1,
                             child: SizedBox(
                               width: widget.annotationWidth,
@@ -184,10 +181,7 @@ class _ArViewState extends State<ArView> {
         ),
       ),
     );
-    final screenWidth = MediaQuery
-        .of(context)
-        .size
-        .width;
+    final screenWidth = MediaQuery.of(context).size.width;
     switch (position) {
       case RadarPosition.topCenter:
         return Positioned(
@@ -227,10 +221,7 @@ class _ArViewState extends State<ArView> {
   Widget _debugInfo(BuildContext context, ArSensor? arSensor) {
     return Container(
       color: Colors.white,
-      width: MediaQuery
-          .of(context)
-          .size
-          .width,
+      width: MediaQuery.of(context).size.width,
       child: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Column(
@@ -249,12 +240,14 @@ class _ArViewState extends State<ArView> {
 
   Widget loading() {
     return const Center(
-      child: CircularProgressIndicator(color: Colors.white,),
+      child: CircularProgressIndicator(
+        color: Colors.white,
+      ),
     );
   }
 
-  void _calculateFOV(NativeDeviceOrientation orientation, double width,
-      double height) {
+  void _calculateFOV(
+      NativeDeviceOrientation orientation, double width, double height) {
     double hFov = 0;
     double vFov = 0;
     const tempFOv = 58.0; // زاوية الرؤية الأساسية
@@ -277,9 +270,8 @@ class _ArViewState extends State<ArView> {
     arStatus.vPixelPerDegree = vFov > 0 ? (height / vFov) : 0;
   }
 
-
-  List<ArAnnotation> _visibleAnnotations(List<ArAnnotation> annotations,
-      double heading) {
+  List<ArAnnotation> _visibleAnnotations(
+      List<ArAnnotation> annotations, double heading) {
     final degreesDeltaH = arStatus.hFov;
     return annotations.where((ArAnnotation annotation) {
       final delta = ArMath.deltaAngle(heading, annotation.azimuth);
@@ -316,19 +308,22 @@ class _ArViewState extends State<ArView> {
 
   List<ArAnnotation> _filterAndSortArAnnotation(List<ArAnnotation> annotations,
       ArSensor arSensor, Position deviceLocation) {
-    List<ArAnnotation> temps = _calculateDistanceAndBearingFromUser(
+    print('DEBUG: Received annotations count: \\${annotations.length}');
+    final List<ArAnnotation> temps = _calculateDistanceAndBearingFromUser(
         annotations, deviceLocation, arSensor);
-    temps = annotations
-        .where(
-            (element) => element.distanceFromUser < widget.maxVisibleDistance)
-        .toList();
-    temps = _visibleAnnotations(temps, arSensor.heading);
+    // TEMP: Relax filtering for debugging
+    // temps = annotations
+    //     .where(
+    //         (element) => element.distanceFromUser < widget.maxVisibleDistance)
+    //     .toList();
+    // temps = _visibleAnnotations(temps, arSensor.heading);
+    // For debugging, show all annotations
+    print('DEBUG: After distance/visibility filtering: \\${temps.length}');
     return temps;
   }
 
   void _transformAnnotation(List<ArAnnotation> annotations) {
-    annotations.sort((a, b) =>
-    (a.distanceFromUser < b.distanceFromUser)
+    annotations.sort((a, b) => (a.distanceFromUser < b.distanceFromUser)
         ? -1
         : ((a.distanceFromUser > b.distanceFromUser) ? 1 : 0));
 
@@ -340,7 +335,7 @@ class _ArViewState extends State<ArView> {
           break;
         }
         final collision =
-        intersects(annotation, annotation2, widget.annotationWidth);
+            intersects(annotation, annotation2, widget.annotationWidth);
         if (collision) {
           annotation.arPositionOffset = Offset(
               0,
@@ -353,10 +348,10 @@ class _ArViewState extends State<ArView> {
     }
   }
 
-  bool intersects(ArAnnotation annotation1, ArAnnotation annotation2,
-      double width) {
+  bool intersects(
+      ArAnnotation annotation1, ArAnnotation annotation2, double width) {
     return (annotation2.arPosition.dx >= annotation1.arPosition.dx &&
-        annotation2.arPosition.dx <= (annotation1.arPosition.dx + width)) ||
+            annotation2.arPosition.dx <= (annotation1.arPosition.dx + width)) ||
         (annotation1.arPosition.dx >= annotation2.arPosition.dx &&
             annotation1.arPosition.dx <= (annotation2.arPosition.dx + width));
   }
