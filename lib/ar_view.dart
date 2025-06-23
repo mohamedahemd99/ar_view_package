@@ -122,22 +122,26 @@ class _ArViewState extends State<ArView> {
                 Stack(
                   children: annotations.map(
                     (e) {
-                      print(
-                          'DEBUG: Building annotation widget for UID: \\${e.uid}, visible: \\${e.isVisible}, distance: \\${e.distanceFromUser}');
+                      // Clamp position
+                      double left = e.arPosition.dx;
+                      double top = e.arPosition.dy + height * 0.5;
+                      left = left.clamp(0.0, width - widget.annotationWidth);
+                      top = top.clamp(0.0, height - widget.annotationHeight);
+                      // Clamp scale
+                      double scale = widget.scaleWithDistance
+                          ? (1 -
+                              (e.distanceFromUser /
+                                  (widget.maxVisibleDistance + 280)))
+                          : 1.0;
+                      scale = scale.clamp(0.5, 1.0);
                       return AnimatedPositioned(
                         duration: const Duration(milliseconds: 300),
-                        // Add this duration
-
-                        left: e.arPosition.dx,
-                        top: e.arPosition.dy + height * 0.5,
+                        left: left,
+                        top: top,
                         child: Transform.translate(
                           offset: Offset(0, e.arPositionOffset.dy),
                           child: Transform.scale(
-                            scale: widget.scaleWithDistance
-                                ? 1 -
-                                    (e.distanceFromUser /
-                                        (widget.maxVisibleDistance + 280))
-                                : 1,
+                            scale: scale,
                             child: SizedBox(
                               width: widget.annotationWidth,
                               height: widget.annotationHeight,

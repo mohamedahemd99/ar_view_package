@@ -14,6 +14,9 @@ class ArSensorManager {
 
   ArSensorManager._internal();
 
+  /// Smoothing factor for heading/pitch. Higher = smoother, less vibration. Default 0.1
+  double smoothingAlpha = 0.1;
+
   StreamSubscription<AccelerometerEvent>? _accelerationStream;
   StreamSubscription<CompassEvent>? _headingStream;
   StreamSubscription<UserAccelerometerEvent>? _userAccelerationStream;
@@ -87,14 +90,13 @@ class ArSensorManager {
     pitchHistory.add(pitch);
 
     const serieLength = 100;
-    const alpha = 0.009;
     if (pitchHistory.length > serieLength) {
       pitchHistory = pitchHistory.sublist(pitchHistory.length - serieLength);
     }
 
     final arSensor = ArSensor(
-      heading: _heading,
-      pitch: _filterExponential(pitchHistory, alpha),
+      heading: ArMath.normalizeDegree(_heading),
+      pitch: _filterExponential(pitchHistory, smoothingAlpha),
       location: _position,
       orientation: _orientation,
       compassAccuracy: _compassAccuracy,
