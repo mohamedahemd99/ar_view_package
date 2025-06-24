@@ -7,7 +7,7 @@ class ArCamera extends StatefulWidget {
     super.key,
     required this.onCameraError,
     required this.onCameraSuccess,
-    this.aspectRatio = 4 / 3,
+    this.aspectRatio = 1 / 1,
   });
 
   final Function(String error) onCameraError;
@@ -48,7 +48,7 @@ class _ArCameraViewState extends State<ArCamera> {
           sensorConfig: SensorConfig.single(
             sensor: Sensor.position(SensorPosition.back),
             flashMode: FlashMode.none,
-            aspectRatio: CameraAspectRatios.ratio_4_3,
+            aspectRatio: CameraAspectRatios.ratio_1_1,
             zoom: 0.0,
           ),
           progressIndicator: _showCirularLoading(context),
